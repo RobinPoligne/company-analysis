@@ -1,8 +1,11 @@
 import datetime
 import json
+import warnings
 from pathlib import Path
 
 import yfinance as yf
+
+warnings.filterwarnings("ignore")
 
 TICKER = "NVDA"
 OUT_DIR = Path(__file__).resolve().parent.parent / "site" / "data" / "companies"
@@ -34,6 +37,8 @@ def fetch(ticker):
             "pe_ratio": info.get("trailingPE"),
             "high_52w": info.get("fiftyTwoWeekHigh"),
             "low_52w": info.get("fiftyTwoWeekLow"),
+            "shares_outstanding": info.get("sharesOutstanding"),
+            "beta": info.get("beta"),
             "as_of": datetime.date.today().isoformat(),
         },
         "financials": {
@@ -43,6 +48,9 @@ def fetch(ticker):
             "free_cash_flow": row(t.cashflow, "Free Cash Flow"),
             "total_debt": row(t.balance_sheet, "Total Debt"),
             "equity": row(t.balance_sheet, "Stockholders Equity"),
+            "cash": row(t.balance_sheet, "Cash Cash Equivalents And Short Term Investments"),
+            "current_assets": row(t.balance_sheet, "Current Assets"),
+            "current_liabilities": row(t.balance_sheet, "Current Liabilities"),
         },
         "prices_weekly": [
             [d.strftime("%Y-%m-%d"), round(float(p), 2)] for d, p in prices.items()

@@ -1,0 +1,33 @@
+{
+  "dcf": {
+    "wacc": 0.085,
+    "terminal_growth": 0.03,
+    "forecast_years": 10,
+    "starting_fcf_growth": 0.15
+  },
+  "weights": {
+    "growth": 0.2,
+    "profitability": 0.2,
+    "financial_health": 0.2,
+    "valuation": 0.2,
+    "risk": 0.2
+  },
+  "ratings": [
+    ["Strong Buy", 8.0],
+    ["Buy", 6.5],
+    ["Hold", 5.0],
+    ["Sell", 3.5],
+    ["Strong Sell", 0]
+  ],
+  "ranges": {
+    "revenue_growth": [0.0, 0.30],
+    "earnings_growth": [0.0, 0.40],
+    "operating_margin": [0.0, 0.40],
+    "net_margin": [0.0, 0.30],
+    "current_ratio": [0.5, 2.5],
+    "debt_to_equity": [2.0, 0.0],
+    "pe_ratio": [50, 10],
+    "dcf_upside": [-0.3, 0.3],
+    "beta": [2.0, 0.6]
+  }
+}
