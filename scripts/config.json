@@ -3,7 +3,7 @@
     "wacc": 0.085,
     "terminal_growth": 0.03,
     "forecast_years": 10,
-    "starting_fcf_growth": 0.15
+    "starting_fcf_growth": 0.3
   },
   "weights": {
     "growth": 0.2,

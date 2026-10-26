@@ -1,0 +1,209 @@
+{
+  "ticker": "NVDA",
+  "name": "NVIDIA Corporation",
+  "fiscal_year": "2026",
+  "price_as_of": "2026-10-26",
+  "metrics": {
+    "revenue_growth": 0.6547,
+    "earnings_growth": 0.6475,
+    "operating_margin": 0.6038,
+    "net_margin": 0.556,
+    "fcf_margin": 0.4477,
+    "current_ratio": 3.9053,
+    "debt_to_equity": 0.0702,
+    "pe_ratio": 26.67,
+    "dcf_upside": 0.0622,
+    "beta": 2.216
+  },
+  "dcf": {
+    "assumptions": {
+      "wacc": 0.085,
+      "terminal_growth": 0.03,
+      "forecast_years": 10,
+      "starting_fcf_growth": 0.3
+    },
+    "base_fcf": 96676000000.0,
+    "net_debt": -51516000000.0,
+    "enterprise_value": 5359579033321.209,
+    "equity_value": 5411095033321.209,
+    "fair_value_per_share": 224.0897,
+    "current_price": 210.96,
+    "upside": 0.0622,
+    "sensitivity": {
+      "wacc_values": [
+        0.065,
+        0.075,
+        0.085,
+        0.095,
+        0.105
+      ],
+      "terminal_growth_values": [
+        0.02,
+        0.025,
+        0.03,
+        0.035,
+        0.04
+      ],
+      "grid": [
+        [
+          289.6737,
+          232.5395,
+          193.2016,
+          164.529,
+          142.7473
+        ],
+        [
+          322.8117,
+          253.4044,
+          207.3647,
+          174.6647,
+          150.2914
+        ],
+        [
+          365.3947,
+          278.8889,
+          224.0897,
+          186.3493,
+          158.8328
+        ],
+        [
+          422.1451,
+          310.7255,
+          244.1452,
+          199.9697,
+          168.5849
+        ],
+        [
+          501.5631,
+          351.636,
+          268.6412,
+          216.0539,
+          179.8272
+        ]
+      ]
+    }
+  },
+  "score": {
+    "total": 7.1519,
+    "rating": "Buy",
+    "components": {
+      "growth": {
+        "score": 10.0,
+        "weight": 0.2,
+        "metrics": [
+          {
+            "metric": "revenue_growth",
+            "value": 0.6547,
+            "score": 10.0,
+            "range": [
+              0.0,
+              0.3
+            ]
+          },
+          {
+            "metric": "earnings_growth",
+            "value": 0.6475,
+            "score": 10.0,
+            "range": [
+              0.0,
+              0.4
+            ]
+          }
+        ],
+        "contribution": 2.0
+      },
+      "profitability": {
+        "score": 10.0,
+        "weight": 0.2,
+        "metrics": [
+          {
+            "metric": "operating_margin",
+            "value": 0.6038,
+            "score": 10.0,
+            "range": [
+              0.0,
+              0.4
+            ]
+          },
+          {
+            "metric": "net_margin",
+            "value": 0.556,
+            "score": 10.0,
+            "range": [
+              0.0,
+              0.3
+            ]
+          }
+        ],
+        "contribution": 2.0
+      },
+      "financial_health": {
+        "score": 9.8245,
+        "weight": 0.2,
+        "metrics": [
+          {
+            "metric": "current_ratio",
+            "value": 3.9053,
+            "score": 10.0,
+            "range": [
+              0.5,
+              2.5
+            ]
+          },
+          {
+            "metric": "debt_to_equity",
+            "value": 0.0702,
+            "score": 9.6491,
+            "range": [
+              2.0,
+              0.0
+            ]
+          }
+        ],
+        "contribution": 1.9649
+      },
+      "valuation": {
+        "score": 5.9349,
+        "weight": 0.2,
+        "metrics": [
+          {
+            "metric": "pe_ratio",
+            "value": 26.67,
+            "score": 5.8325,
+            "range": [
+              50,
+              10
+            ]
+          },
+          {
+            "metric": "dcf_upside",
+            "value": 0.0622,
+            "score": 6.0373,
+            "range": [
+              -0.3,
+              0.3
+            ]
+          }
+        ],
+        "contribution": 1.187
+      },
+      "risk": {
+        "score": 0.0,
+        "weight": 0.2,
+        "metrics": [
+          {
+            "metric": "beta",
+            "value": 2.216,
+            "score": 0.0,
+            "range": [
+              2.0,
+              0.6
+            ]
+          }
+        ],
+        "contribution": 0.0
+      }
+    }
+  },
+  "warnings": []
+}
