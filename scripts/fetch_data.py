@@ -20,6 +20,23 @@ def row(df, name):
     return {str(col.year): float(val) for col, val in sorted(series.items())}
 
 
+def ttm_fcf(t):
+    """Sum of the last four quarters of free cash flow ({} if unavailable)."""
+    df = t.quarterly_cashflow
+    if df is None or df.empty or "Free Cash Flow" not in df.index:
+        print("  warning: quarterly 'Free Cash Flow' not found")
+        return {}
+    series = df.loc["Free Cash Flow"].dropna().sort_index()
+    if len(series) < 4:
+        print(f"  warning: only {len(series)} quarters of free cash flow found")
+        return {}
+    last4 = series.iloc[-4:]
+    return {
+        "free_cash_flow": float(last4.sum()),
+        "through": last4.index[-1].strftime("%Y-%m-%d"),
+    }
+
+
 def fetch(ticker):
     t = yf.Ticker(ticker)
     info = t.info
@@ -52,6 +69,7 @@ def fetch(ticker):
             "current_assets": row(t.balance_sheet, "Current Assets"),
             "current_liabilities": row(t.balance_sheet, "Current Liabilities"),
         },
+        "ttm": ttm_fcf(t),
         "prices_weekly": [
             [d.strftime("%Y-%m-%d"), round(float(p), 2)] for d, p in prices.items()
         ],
@@ -67,3 +85,4 @@ if __name__ == "__main__":
     print(f"Name: {data['name']}")
     print(f"Years of revenue data: {list(data['financials']['revenue'])}")
     print(f"Weekly price points: {len(data['prices_weekly'])}")
+    print(f"Trailing 12-month FCF: {data['ttm']}")

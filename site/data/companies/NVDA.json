@@ -5,9 +5,9 @@
   "industry": "Semiconductors",
   "country": "United States",
   "price": {
-    "last": 210.96,
-    "market_cap": 5094050889728,
-    "pe_ratio": 26.67004,
+    "last": 216.0,
+    "market_cap": 5215751766016,
+    "pe_ratio": 27.307207,
     "high_52w": 243.37,
     "low_52w": 164.27,
     "shares_outstanding": 24147000000,
@@ -69,6 +69,10 @@
       "2025": 18047000000.0,
       "2026": 32163000000.0
     }
+  },
+  "ttm": {
+    "free_cash_flow": 127006000000.0,
+    "through": "2026-07-31"
   },
   "prices_weekly": [
     [
@@ -1114,6 +1118,10 @@
     [
       "2026-10-19",
       210.96
+    ],
+    [
+      "2026-10-26",
+      216.0
     ]
   ]
 }

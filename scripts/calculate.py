@@ -1,4 +1,4 @@
-"""Calculate ratios, DCF value and the transparent score for one company."""
+"""Calculate ratios, DCF scenarios, reverse DCF and the transparent score."""
 import json
 import sys
 from pathlib import Path
@@ -14,7 +14,7 @@ COMPONENTS = {
     "profitability": ["operating_margin", "net_margin"],
     "financial_health": ["current_ratio", "debt_to_equity"],
     "valuation": ["pe_ratio", "dcf_upside"],
-    "risk": ["beta"],
+    "risk": ["beta", "volatility", "max_drawdown"],
 }
 
 
@@ -39,20 +39,84 @@ def score_metric(value, lo, hi):
     return max(0.0, min(10.0, s))
 
 
-def run_dcf(fcf0, wacc, g_term, years, g_start, net_debt, shares):
-    """Growth fades in a straight line from g_start (year 1) to g_term (last year)."""
+def price_risk(prices):
+    """Annualised volatility of weekly returns and max drawdown (as a positive
+    fraction, e.g. 0.66 = a 66% fall from peak) from weekly closing prices."""
+    closes = [p for _, p in prices if p]
+    if len(closes) < 52:
+        return None, None
+    returns = [closes[i] / closes[i - 1] - 1 for i in range(1, len(closes))]
+    mean = sum(returns) / len(returns)
+    variance = sum((r - mean) ** 2 for r in returns) / (len(returns) - 1)
+    volatility = (variance ** 0.5) * (52 ** 0.5)
+    peak = closes[0]
+    max_drawdown = 0.0
+    for c in closes:
+        peak = max(peak, c)
+        max_drawdown = max(max_drawdown, 1 - c / peak)
+    return volatility, max_drawdown
+
+
+def run_dcf(fcf0, wacc, g_term, years, g_start, hold_years, net_debt, shares):
+    """Growth stays at g_start for hold_years, then fades in a straight line
+    to g_term by the last forecast year."""
+    if years < 2:
+        raise ValueError("forecast_years must be at least 2")
+    if not 0 <= hold_years < years:
+        raise ValueError("high_growth_years must be between 0 and forecast_years - 1")
     if wacc <= g_term:
-        raise ValueError("WACC must be higher than terminal growth")
+        raise ValueError("Discount rate must be higher than terminal growth")
     pv = 0.0
     fcf = fcf0
     for i in range(1, years + 1):
-        g = g_start + (g_term - g_start) * (i - 1) / (years - 1)
+        if i <= hold_years:
+            g = g_start
+        else:
+            g = g_start + (g_term - g_start) * (i - hold_years) / (years - hold_years)
         fcf *= 1 + g
         pv += fcf / (1 + wacc) ** i
     terminal_value = fcf * (1 + g_term) / (wacc - g_term)
     pv += terminal_value / (1 + wacc) ** years
     equity_value = pv - net_debt
     return pv, equity_value, equity_value / shares
+
+
+def discount_rate(d, beta, warnings):
+    """Return (rate, details). CAPM from beta, kept inside a min/max band."""
+    fixed = d["fixed_wacc"]
+    if d["wacc_method"] != "capm":
+        return fixed, {"method": "fixed", "wacc": fixed}
+    if beta is None:
+        warnings.append("Beta missing: used the fixed discount rate")
+        return fixed, {"method": "fixed (beta missing)", "wacc": fixed}
+    beta_used = 0.67 * beta + 0.33 if d["use_adjusted_beta"] else beta
+    cost_of_equity = d["risk_free_rate"] + beta_used * d["equity_risk_premium"]
+    wacc = max(d["wacc_min"], min(d["wacc_max"], cost_of_equity))
+    return wacc, {
+        "method": "capm",
+        "raw_beta": beta,
+        "beta_used": beta_used,
+        "cost_of_equity": cost_of_equity,
+        "wacc": wacc,
+        "clamped": wacc != cost_of_equity,
+    }
+
+
+def implied_growth(fcf0, wacc, g_term, years, hold_years, net_debt, shares, price):
+    """Reverse DCF: starting growth at which the fair value equals the price."""
+    def value(g):
+        return run_dcf(fcf0, wacc, g_term, years, g, hold_years, net_debt, shares)[2]
+
+    lo, hi = -0.10, 1.00
+    if value(lo) > price or value(hi) < price:
+        return None
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if value(mid) < price:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
 
 
 def clean(obj):
@@ -91,9 +155,22 @@ def analyse(ticker, config):
         pe = None
         warnings.append("P/E missing or negative: not scored")
 
-    # ---- DCF ----
+    volatility, max_drawdown = price_risk(raw.get("prices_weekly", []))
+    if volatility is None:
+        warnings.append("Not enough price history for volatility and drawdown")
+
+    # ---- Starting free cash flow: trailing 12 months if we have it ----
+    ttm = raw.get("ttm") or {}
+    if ttm.get("free_cash_flow") and ttm["free_cash_flow"] > 0:
+        fcf = ttm["free_cash_flow"]
+        fcf_source = f"trailing 4 quarters to {ttm.get('through')}"
+    else:
+        fcf = val("free_cash_flow")
+        fcf_source = f"fiscal year {year}"
+        warnings.append("Trailing free cash flow unavailable: used latest annual figure")
+
+    # ---- DCF (bear / base / bull) plus reverse DCF ----
     d = config["dcf"]
-    fcf = val("free_cash_flow")
     shares = price.get("shares_outstanding")
     last_price = price.get("last")
     net_debt = (val("total_debt") or 0) - (val("cash") or 0)
@@ -101,29 +178,58 @@ def analyse(ticker, config):
     upside = None
 
     if fcf and fcf > 0 and shares and last_price:
-        args = (d["forecast_years"], d["starting_fcf_growth"], net_debt, shares)
-        ev, eq_value, per_share = run_dcf(fcf, d["wacc"], d["terminal_growth"], *args)
-        upside = per_share / last_price - 1
+        years = d["forecast_years"]
+        wacc, rate_info = discount_rate(d, price.get("beta"), warnings)
+        g_term = d["terminal_growth"]
+        wacc_values = [wacc + x for x in (-0.02, -0.01, 0, 0.01, 0.02)]
+        growth_values = [g_term + x for x in (-0.01, -0.005, 0, 0.005, 0.01)]
 
-        wacc_values = [d["wacc"] + x for x in (-0.02, -0.01, 0, 0.01, 0.02)]
-        growth_values = [d["terminal_growth"] + x for x in (-0.01, -0.005, 0, 0.005, 0.01)]
-        grid = [
-            [run_dcf(fcf, w, g, *args)[2] for w in wacc_values]
-            for g in growth_values
-        ]
+        scenarios = {}
+        for name, s in d["scenarios"].items():
+            g0, hold = s["starting_fcf_growth"], s["high_growth_years"]
+            ev, eq_value, per_share = run_dcf(
+                fcf, wacc, g_term, years, g0, hold, net_debt, shares
+            )
+            grid = [
+                [run_dcf(fcf, w, g, years, g0, hold, net_debt, shares)[2]
+                 for w in wacc_values]
+                for g in growth_values
+            ]
+            scenarios[name] = {
+                "starting_fcf_growth": g0,
+                "high_growth_years": hold,
+                "enterprise_value": ev,
+                "equity_value": eq_value,
+                "fair_value_per_share": per_share,
+                "upside": per_share / last_price - 1,
+                "sensitivity": {
+                    "wacc_values": wacc_values,
+                    "terminal_growth_values": growth_values,
+                    "grid": grid,
+                },
+            }
+
+        score_name = d["score_scenario"]
+        upside = scenarios[score_name]["upside"]
+        hold_for_reverse = d["scenarios"][score_name]["high_growth_years"]
+        implied = implied_growth(
+            fcf, wacc, g_term, years, hold_for_reverse, net_debt, shares, last_price
+        )
         dcf_out = {
-            "assumptions": d,
+            "assumptions": {
+                "discount_rate": rate_info,
+                "terminal_growth": g_term,
+                "forecast_years": years,
+            },
             "base_fcf": fcf,
+            "base_fcf_source": fcf_source,
             "net_debt": net_debt,
-            "enterprise_value": ev,
-            "equity_value": eq_value,
-            "fair_value_per_share": per_share,
             "current_price": last_price,
-            "upside": upside,
-            "sensitivity": {
-                "wacc_values": wacc_values,
-                "terminal_growth_values": growth_values,
-                "grid": grid,
+            "score_scenario": score_name,
+            "scenarios": scenarios,
+            "reverse_dcf": {
+                "implied_starting_fcf_growth": implied,
+                "high_growth_years": hold_for_reverse,
             },
         }
     else:
@@ -140,77 +246,3 @@ def analyse(ticker, config):
         "debt_to_equity": debt_to_equity,
         "pe_ratio": pe,
         "dcf_upside": upside,
-        "beta": price.get("beta"),
-    }
-
-    # ---- Score ----
-    components = {}
-    for name, keys in COMPONENTS.items():
-        items = []
-        for key in keys:
-            lo, hi = config["ranges"][key]
-            value = metrics[key]
-            items.append({
-                "metric": key,
-                "value": value,
-                "score": score_metric(value, lo, hi),
-                "range": [lo, hi],
-            })
-        scores = [i["score"] for i in items if i["score"] is not None]
-        components[name] = {
-            "score": sum(scores) / len(scores) if scores else None,
-            "weight": config["weights"][name],
-            "metrics": items,
-        }
-
-    usable = {n: c for n, c in components.items() if c["score"] is not None}
-    if not usable:
-        raise ValueError("No score component could be calculated")
-    total_weight = sum(c["weight"] for c in usable.values())
-    for c in usable.values():
-        c["contribution"] = c["score"] * c["weight"] / total_weight
-    total = sum(c["contribution"] for c in usable.values())
-    rating = next(label for label, threshold in config["ratings"] if total >= threshold)
-
-    return clean({
-        "ticker": ticker,
-        "name": raw["name"],
-        "fiscal_year": year,
-        "price_as_of": price.get("as_of"),
-        "metrics": metrics,
-        "dcf": dcf_out,
-        "score": {"total": total, "rating": rating, "components": components},
-        "warnings": warnings,
-    })
-
-
-def pct(x):
-    return "n/a" if x is None else f"{x * 100:.1f}%"
-
-
-if __name__ == "__main__":
-    ticker = sys.argv[1].upper() if len(sys.argv) > 1 else "NVDA"
-    config = json.loads((SCRIPTS_DIR / "config.json").read_text())
-    result = analyse(ticker, config)
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_file = OUT_DIR / f"{ticker}.json"
-    out_file.write_text(json.dumps(result, indent=2))
-
-    m = result["metrics"]
-    print(f"Saved {out_file}")
-    print(f"\n{result['name']} ({ticker}), fiscal year {result['fiscal_year']}")
-    print(f"Revenue growth: {pct(m['revenue_growth'])}   Earnings growth: {pct(m['earnings_growth'])}")
-    print(f"Operating margin: {pct(m['operating_margin'])}   Net margin: {pct(m['net_margin'])}")
-    print(f"Current ratio: {m['current_ratio']}   Debt/equity: {m['debt_to_equity']}")
-    print(f"P/E: {m['pe_ratio']}   Beta: {m['beta']}")
-    if result["dcf"]:
-        dcf = result["dcf"]
-        print(f"DCF fair value: ${dcf['fair_value_per_share']:.2f} vs price "
-              f"${dcf['current_price']:.2f} (upside {pct(dcf['upside'])})")
-    print(f"\nScore: {result['score']['total']:.1f} / 10  ->  {result['score']['rating']}")
-    for name, c in result["score"]["components"].items():
-        s = "n/a" if c["score"] is None else f"{c['score']:.1f}"
-        print(f"  {name:<18} {s:>5}   (weight {c['weight']})")
-    for w in result["warnings"]:
-        print(f"WARNING: {w}")

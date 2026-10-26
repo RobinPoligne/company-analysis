@@ -1,9 +1,20 @@
 {
   "dcf": {
-    "wacc": 0.085,
+    "wacc_method": "capm",
+    "fixed_wacc": 0.085,
+    "risk_free_rate": 0.044,
+    "equity_risk_premium": 0.05,
+    "use_adjusted_beta": true,
+    "wacc_min": 0.07,
+    "wacc_max": 0.12,
     "terminal_growth": 0.03,
     "forecast_years": 10,
-    "starting_fcf_growth": 0.3
+    "scenarios": {
+      "bear": { "starting_fcf_growth": 0.15, "high_growth_years": 2 },
+      "base": { "starting_fcf_growth": 0.25, "high_growth_years": 3 },
+      "bull": { "starting_fcf_growth": 0.35, "high_growth_years": 3 }
+    },
+    "score_scenario": "base"
   },
   "weights": {
     "growth": 0.2,
@@ -28,6 +39,8 @@
     "debt_to_equity": [2.0, 0.0],
     "pe_ratio": [50, 10],
     "dcf_upside": [-0.3, 0.3],
-    "beta": [2.0, 0.6]
+    "beta": [2.5, 0.6],
+    "volatility": [0.80, 0.15],
+    "max_drawdown": [0.80, 0.10]
   }
 }
