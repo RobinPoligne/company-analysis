@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Valuelens - S&amp;P 500</title>
+<style>
+:root{--bg:#0a0f1d;--panel:#111a2e;--line:#1f2b45;--tx:#e6ebf5;--mu:#8b97b3;--ac:#3b82f6;--up:#34d399;--dn:#f87171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+a{color:var(--ac);text-decoration:none}header{display:flex;gap:16px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:700;font-size:18px;color:var(--tx)}input,select{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--tx);padding:8px 12px;font:inherit}
+main{max-width:1200px;margin:0 auto;padding:20px 24px 48px}.p{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%}th,td{padding:8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}th{cursor:pointer;color:var(--mu);font-weight:600}.up{color:var(--up)}.dn{color:var(--dn)}.mu{color:var(--mu)}
+</style></head><body>
+<header><a class="brand" href="index.html">Valuelens</a><input id="q" placeholder="Search name or ticker" aria-label="Search"><select id="sec" aria-label="Sector"></select><span class="mu" id="cnt"></span></header>
+<main><div class="p"><table id="t"></table></div><p class="mu">Scores are model output, not financial advice. Click a column to sort.</p></main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money=n=>{if(n==null)return"n/a";const a=Math.abs(n);return a>=1e12?"$"+(n/1e12).toFixed(2)+"T":a>=1e9?"$"+(n/1e9).toFixed(1)+"B":"$"+(n/1e6).toFixed(0)+"M"};
+const C=[["t","Symbol"],["n","Company"],["s","Sector"],["p","Price"],["m","Market cap"],["pe","P/E"],["sc","Score"],["r","Rating"],["u","DCF upside"]];
+let rows=[],key="m",dir=-1;
+function draw(){const q=$("#q").value.toLowerCase(),sec=$("#sec").value;
+  const r=rows.filter(x=>(!sec||x.s===sec)&&(!q||x.t.toLowerCase().includes(q)||String(x.n).toLowerCase().includes(q)));
+  r.sort((a,b)=>{const x=a[key],y=b[key];return((x==null)-(y==null))||(x>y?1:x<y?-1:0)*dir});
+  $("#cnt").textContent=r.length+" companies";
+  $("#t").innerHTML="<tr>"+C.map(c=>`<th data-k="${c[0]}">${c[1]}${c[0]===key?(dir>0?" &uarr;":" &darr;"):""}</th>`).join("")+"</tr>"+
+  r.map(x=>`<tr><td><a href="index.html?t=${encodeURIComponent(x.t)}">${esc(x.t)}</a></td><td>${esc(x.n)}</td><td>${esc(x.s||"n/a")}</td><td>${x.p==null?"n/a":"$"+x.p.toFixed(2)}</td><td>${money(x.m)}</td>
+  <td>${x.pe==null?"n/a":x.pe.toFixed(1)}</td><td>${x.sc.toFixed(1)}</td><td>${esc(x.r)}</td><td class="${x.u>=0?"up":"dn"}">${x.u==null?"n/a":(x.u*100).toFixed(1)+"%"}</td></tr>`).join("");}
+$("#t").onclick=e=>{const k=e.target.dataset.k;if(!k)return;dir=k===key?-dir:(k==="t"||k==="n"||k==="s"?1:-1);key=k;draw()};
+$("#q").oninput=draw;$("#sec").onchange=draw;
+fetch("data/index.json").then(r=>{if(!r.ok)throw 0;return r.json()}).then(d=>{rows=d;
+  $("#sec").innerHTML='<option value="">All sectors</option>'+[...new Set(d.map(x=>x.s).filter(Boolean))].sort().map(s=>`<option>${esc(s)}</option>`).join("");draw()})
+ .catch(()=>{$("#t").innerHTML="<tr><td>No index yet. Run python scripts/batch.py, then open this page with Live Server.</td></tr>"});
+</script></body></html>

@@ -37,6 +37,18 @@ def ttm_fcf(t):
     }
 
 
+def short_prices(t):
+    """Recent prices for the 1D, 5D and 1M chart views (1D uses 5-minute points)."""
+    out = {}
+    for key, (period, interval) in {"1d": ("1d", "5m"), "5d": ("5d", "30m"), "1m": ("1mo", "1d")}.items():
+        try:
+            s = t.history(period=period, interval=interval)["Close"].dropna()
+            out[key] = [[d.strftime("%Y-%m-%d %H:%M"), round(float(p), 2)] for d, p in s.items()]
+        except Exception:
+            out[key] = []
+    return out
+
+
 def fetch(ticker):
     t = yf.Ticker(ticker)
     info = t.info
@@ -58,6 +70,35 @@ def fetch(ticker):
             "beta": info.get("beta"),
             "as_of": datetime.date.today().isoformat(),
         },
+        "stats": {
+            "forward_pe": info.get("forwardPE"),
+            "ps_ratio": info.get("priceToSalesTrailing12Months"),
+            "pb_ratio": info.get("priceToBook"),
+            "enterprise_value": info.get("enterpriseValue"),
+            "ev_ebitda": info.get("enterpriseToEbitda"),
+            "peg": info.get("trailingPegRatio"),
+            "roe": info.get("returnOnEquity"),
+            "roa": info.get("returnOnAssets"),
+            "gross_margin": info.get("grossMargins"),
+            "eps": info.get("trailingEps"),
+            "forward_eps": info.get("forwardEps"),
+            "avg_50": info.get("fiftyDayAverage"),
+            "avg_200": info.get("twoHundredDayAverage"),
+            "target_mean": info.get("targetMeanPrice"),
+            "analyst_count": info.get("numberOfAnalystOpinions"),
+            "rating": info.get("recommendationKey"),
+            "target_low": info.get("targetLowPrice"),
+            "target_high": info.get("targetHighPrice"),
+            "prev_close": info.get("previousClose"),
+            "day_low": info.get("dayLow"),
+            "day_high": info.get("dayHigh"),
+            "volume": info.get("volume"),
+        },
+        "profile": {
+            "description": info.get("longBusinessSummary"),
+            "employees": info.get("fullTimeEmployees"),
+            "website": info.get("website"),
+        },
         "financials": {
             "revenue": row(t.financials, "Total Revenue"),
             "net_income": row(t.financials, "Net Income"),
@@ -70,6 +111,7 @@ def fetch(ticker):
             "current_liabilities": row(t.balance_sheet, "Current Liabilities"),
         },
         "ttm": ttm_fcf(t),
+        "prices_short": short_prices(t),
         "prices_weekly": [
             [d.strftime("%Y-%m-%d"), round(float(p), 2)] for d, p in prices.items()
         ],

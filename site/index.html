@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Valuelens</title>
+<style>
+:root{--bg:#0a0f1d;--panel:#111a2e;--line:#1f2b45;--tx:#e6ebf5;--mu:#8b97b3;--ac:#3b82f6;--up:#34d399;--dn:#f87171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+a{color:var(--ac)}
+header{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:700;font-size:18px}
+form{display:flex;gap:8px}
+input{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--tx);padding:8px 12px;width:260px;font:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--tx);padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--ac)}
+button.on{background:var(--ac);border-color:var(--ac)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+main{max-width:1200px;margin:0 auto;padding:20px 24px 48px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(12,1fr);margin-top:16px}
+.p{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.s12{grid-column:span 12}.s7{grid-column:span 7}.s5{grid-column:span 5}.s3{grid-column:span 3}
+@media(max-width:900px){.s7,.s5{grid-column:span 12}.s3{grid-column:span 6}}
+h1{margin:0;font-size:26px}
+h2{margin:0 0 12px;font-size:16px}
+.mu{color:var(--mu)}.up{color:var(--up)}.dn{color:var(--dn)}
+.top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.stats{display:flex;gap:28px;flex-wrap:wrap;margin-top:14px}
+.stats b{display:block;font-size:16px}
+.price{font-size:32px;font-weight:700}
+.big{font-size:24px;font-weight:700;display:block}
+.row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.ch{width:100%;height:auto}
+.dn2{width:150px;flex:none}
+.score{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;padding:4px 14px;border-radius:999px;font-weight:700;border:1px solid}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:4px}
+.bar i{display:block;height:100%;border-radius:3px}
+.comp{margin-bottom:10px}
+.comp div{display:flex;justify-content:space-between}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+.heat td{border:1px solid var(--bg)}
+.wrap{overflow-x:auto}
+details{margin-top:12px}summary{cursor:pointer;color:var(--ac)}
+.note{font-size:12px;color:var(--mu);margin-top:10px}
+.kv{display:grid;gap:4px 28px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.kv label{display:block}.kv label b{float:right}
+input[type=range]{width:100%;padding:0}
+#rep p,#rep .row{margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Valuelens</span>
+  <a href="companies.html">S&amp;P 500</a><form id="sf"><input id="q" placeholder="Ticker, e.g. NVDA" aria-label="Ticker"><button>Open</button></form>
+</header>
+<main id="app"><p class="mu">Loading...</p></main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const f = {
+  money(n){ if(n==null||isNaN(n)) return "n/a"; const a=Math.abs(n), s=n<0?"-":"";
+    if(a>=1e12) return s+"$"+(a/1e12).toFixed(2)+"T"; if(a>=1e9) return s+"$"+(a/1e9).toFixed(1)+"B";
+    if(a>=1e6) return s+"$"+(a/1e6).toFixed(1)+"M"; return s+"$"+a.toFixed(0); },
+  price(n){ return n==null?"n/a":"$"+Number(n).toFixed(2); },
+  pct(n,d=1){ return n==null?"n/a":(n*100).toFixed(d)+"%"; },
+  num(n){ return n==null?"n/a":Number(n).toFixed(2); }
+};
+const M = {revenue_growth:["Revenue growth","p"],earnings_growth:["Earnings growth","p"],operating_margin:["Operating margin","p"],
+  net_margin:["Net margin","p"],current_ratio:["Current ratio","n"],debt_to_equity:["Debt to equity","n"],pe_ratio:["P/E ratio","n"],
+  peg:["PEG (P/E / earnings growth)","n"],dcf_upside:["DCF upside (scored case)","p"],beta:["Beta","n"],
+  volatility:["Volatility (5 years, yearly)","p"],max_drawdown:["Max drawdown (5 years)","p"]};
+const fm = (k,v) => M[k][1]==="p" ? f.pct(v) : f.num(v);
+const CN = {growth:"Growth",profitability:"Profitability",financial_health:"Financial health",valuation:"Valuation",risk:"Risk"};
+const CC = {growth:"#3b82f6",profitability:"#34d399",financial_health:"#fbbf24",valuation:"#fb923c",risk:"#c084fc"};
+const RC = {"Strong Buy":"#34d399","Buy":"#86efac","Hold":"#fbbf24","Sell":"#fb923c","Strong Sell":"#f87171"};
+const get = async p => { const r = await fetch(p); if(!r.ok) throw new Error(p+" ("+r.status+")"); return r.json(); };
+
+function bars(labels, vals){
+  const W=560,H=240,L=58,B=26,T=10,R=8, mx=Math.max(0,...vals), mn=Math.min(0,...vals), span=(mx-mn)||1;
+  const y = v => T+(H-T-B)*(1-(v-mn)/span), bw=(W-L-R)/vals.length;
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="ch" role="img" aria-label="Bar chart">`;
+  for(let i=0;i<=4;i++){ const v=mn+span*i/4, yy=y(v);
+    s += `<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#1f2b45"/><text x="${L-6}" y="${yy+4}" text-anchor="end" fill="#8b97b3" font-size="11">${f.money(v)}</text>`; }
+  vals.forEach((v,i)=>{ const x=L+i*bw+bw*.2;
+    s += `<rect x="${x}" y="${Math.min(y(v),y(0))}" width="${bw*.6}" height="${Math.abs(y(v)-y(0))}" rx="3" fill="${v<0?"#f87171":"#3b82f6"}"><title>${labels[i]}: ${f.money(v)}</title></rect>
+    <text x="${x+bw*.3}" y="${H-8}" text-anchor="middle" fill="#8b97b3" font-size="11">${labels[i]}</text>`; });
+  return s+"</svg>";
+}
+
+function donut(t,col){
+  const r=54, c=2*Math.PI*r, d=c*Math.max(0,Math.min(1,t/10));
+  return `<svg viewBox="0 0 140 140" class="dn2" role="img" aria-label="Score ${t.toFixed(1)} out of 10">
+  <circle cx="70" cy="70" r="${r}" fill="none" stroke="#1f2b45" stroke-width="12"/>
+  <circle cx="70" cy="70" r="${r}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${d} ${c}" transform="rotate(-90 70 70)"/>
+  <text x="70" y="76" text-anchor="middle" font-size="30" font-weight="700" fill="#e6ebf5">${t.toFixed(1)}</text>
+  <text x="70" y="96" text-anchor="middle" font-size="12" fill="#8b97b3">out of 10</text></svg>`;
+}
+
+function heat(s, price){
+  const {wacc_values:w, terminal_growth_values:g, grid} = s.sensitivity;
+  let h = `<table class="heat"><tr><th>Terminal growth / discount rate</th>${w.map(x=>`<th>${f.pct(x)}</th>`).join("")}</tr>`;
+  g.forEach((gv,i)=>{ h += `<tr><th>${f.pct(gv)}</th>` + grid[i].map(v=>{
+    const t=Math.max(-1,Math.min(1,Math.log(v/price)/Math.log(2)));
+    return `<td style="background:hsla(${t>0?150:0},65%,45%,${0.15+0.55*Math.abs(t)})">${f.price(v)}</td>`; }).join("") + "</tr>"; });
+  return h+"</table>";
+}
+
+function valuation(a, name){
+  const d=a.dcf, s=d.scenarios[name], p=d.current_price, as=d.assumptions, dr=as.discount_rate;
+  const mx=Math.max(s.fair_value_per_share,p), up=s.upside;
+  const rate = dr.method==="capm" ? `${f.pct(dr.wacc)} (from beta ${f.num(dr.beta_used)}${dr.clamped?", capped":""})` : f.pct(dr.wacc);
+  const rv = d.reverse_dcf.implied_starting_fcf_growth;
+  return `<div class="s">
+  <span class="mu">Fair value per share, ${esc(name)} case</span>
+  <span class="big">${f.price(s.fair_value_per_share)} <span class="${up>=0?"up":"dn"}" style="font-size:15px">${up>=0?"+":""}${f.pct(up)} vs price</span></span>
+  <div style="margin:12px 0">
+    <div class="mu">DCF value</div><div class="bar" style="height:10px"><i style="width:${Math.max(0,s.fair_value_per_share)/mx*100}%;background:#3b82f6"></i></div>
+    <div class="mu" style="margin-top:8px">Current price ${f.price(p)}</div><div class="bar" style="height:10px"><i style="width:${p/mx*100}%;background:#8b97b3"></i></div></div>
+  <div class="row"><span>Starting free cash flow growth</span><b>${f.pct(s.starting_fcf_growth)} for ${s.high_growth_years} years, then fading</b></div>
+  <div class="row"><span>Terminal growth</span><b>${f.pct(as.terminal_growth)}</b></div>
+  <div class="row"><span>Discount rate</span><b>${rate}</b></div>
+  <div class="row"><span>Forecast period</span><b>${as.forecast_years} years</b></div>
+  <div class="row"><span>Starting free cash flow</span><b>${f.money(d.base_fcf)}</b></div>
+  <div class="row"><span>Net debt</span><b>${f.money(d.net_debt)}</b></div>
+  <p class="note">Starting cash flow source: ${esc(d.base_fcf_source)}.</p>
+  ${d.growth_basis?`<p class="note">${esc(d.growth_basis.text)}</p>`:""}
+  <p>${rv==null?"The current price is outside the range the model can match.":`At ${f.price(p)}, the market is pricing in about <b>${f.pct(rv)}</b> yearly free cash flow growth for ${d.reverse_dcf.high_growth_years} years, then fading.`}</p>
+  </div>
+  <h2 style="margin-top:16px">Sensitivity (${esc(name)} case)</h2><div class="wrap">${heat(s,p)}</div>
+  <p class="note">Each cell is the fair value per share. Green is above the current price, red is below.</p>`;
+}
+
+function methodology(a){
+  return Object.entries(a.score.components).map(([k,c])=>`
+  <h2 style="margin-top:16px">${CN[k]} (weight ${f.pct(c.weight,0)}, score ${c.score==null?"n/a":c.score.toFixed(1)})</h2>
+  <div class="wrap"><table><tr><th>Metric</th><th>Value</th><th>Score</th><th>Weight inside</th><th>Scoring range</th></tr>
+  ${c.metrics.map(m=>`<tr><td>${M[m.metric][0]}</td><td>${fm(m.metric,m.value)}</td><td>${m.score==null?"n/a":m.score.toFixed(1)}</td><td>${m.weight}</td>
+  <td>0 points at ${fm(m.metric,m.range[0])}, 10 points at ${fm(m.metric,m.range[1])}</td></tr>`).join("")}</table></div>`).join("")
+  + `<p class="note">Each metric is scored from 0 to 10 by where it falls between its two range values. A component is the weighted average of its metrics, and the total is the weighted average of the components.
+  Ratings: Strong Buy 8.0 and above, Buy 6.5, Hold 5.0, Sell 3.5, Strong Sell below that.</p>`;
+}
+
+function dcf(f0,w,gt,n,g0,h,nd,sh){let pv=0,x=f0;for(let i=1;i<=n;i++){const g=i<=h?g0:g0+(gt-g0)*(i-h)/(n-h);x*=1+g;pv+=x/Math.pow(1+w,i)}pv+=x*(1+gt)/(w-gt)/Math.pow(1+w,n);return(pv-nd)/sh}
+function implied(f0,w,gt,n,h,nd,sh,p){let lo=-.1,hi=1;if(dcf(f0,w,gt,n,lo,h,nd,sh)>p||dcf(f0,w,gt,n,hi,h,nd,sh)<p)return null;for(let i=0;i<50;i++){const m=(lo+hi)/2;if(dcf(f0,w,gt,n,m,h,nd,sh)<p)lo=m;else hi=m}return(lo+hi)/2}
+function pg(a){ if(!a||!a.dcf) return ""; const d=a.dcf, b=d.scenarios[d.score_scenario], as=d.assumptions;
+  const R=[["g","Starting growth of free cash flow",0,.6,.01,b.starting_fcf_growth],["h","Years of high growth",0,as.forecast_years-1,1,b.high_growth_years],
+    ["w","Discount rate",.06,.15,.005,as.discount_rate.wacc],["t","Terminal growth",0,.04,.005,as.terminal_growth]];
+  return `<div class="p s12"><h2>Set your own assumptions</h2><p class="mu">Move the sliders to see what the stock is worth to you, and what growth today's price already assumes. Starting values are the base case.</p>
+  <div class="kv">${R.map(r=>`<label>${r[1]} <b id="o${r[0]}"></b><input type="range" id="i${r[0]}" min="${r[2]}" max="${r[3]}" step="${r[4]}" value="${r[5]}"></label>`).join("")}</div>
+  <div class="stats"><div><span class="mu">Your fair value</span><b id="rv"></b></div><div><span class="mu">Versus price</span><b id="ru"></b></div><div><span class="mu">Growth the price implies</span><b id="ri"></b></div></div></div>`; }
+function wirePg(a,px){ if(!a||!a.dcf) return; const d=a.dcf, n=d.assumptions.forecast_years, sh=px.shares_outstanding;
+  const up=()=>{ const v=k=>+$("#i"+k).value, g=v("g"), h=v("h"), w=v("w"), t=v("t");
+    $("#og").textContent=f.pct(g); $("#oh").textContent=h+" years"; $("#ow").textContent=f.pct(w); $("#ot").textContent=f.pct(t);
+    const fv=dcf(d.base_fcf,w,t,n,g,h,d.net_debt,sh), im=implied(d.base_fcf,w,t,n,h,d.net_debt,sh,d.current_price);
+    $("#rv").textContent=f.price(fv); $("#ru").textContent=(fv>=d.current_price?"+":"")+f.pct(fv/d.current_price-1); $("#ru").className=fv>=d.current_price?"up":"dn";
+    $("#ri").textContent=im==null?"out of range":f.pct(im)+" a year"; };
+  document.querySelectorAll(".kv input").forEach(i=>i.oninput=up); up(); }
+function st(c,a){ const s=c.stats||{}, m=(a&&a.metrics)||{}, px=c.price, nd=(a&&a.dcf)?a.dcf.net_debt:null;
+  const G={"Valuation":[["P/E ratio",f.num(px.pe_ratio)],["Forward P/E",f.num(s.forward_pe)],["PEG ratio",f.num(m.peg!=null?m.peg:s.peg)],["Price to sales",f.num(s.ps_ratio)],["Price to book",f.num(s.pb_ratio)],["Enterprise value",f.money(s.enterprise_value)],["EV / EBITDA",f.num(s.ev_ebitda)]],
+   "Profitability":[["Gross margin",f.pct(s.gross_margin)],["Operating margin",f.pct(m.operating_margin)],["Net margin",f.pct(m.net_margin)],["Free cash flow margin",f.pct(m.fcf_margin)],["Return on equity",f.pct(s.roe)],["Return on assets",f.pct(s.roa)]],
+   "Financial position":[["Current ratio",f.num(m.current_ratio)],["Debt to equity",f.num(m.debt_to_equity)],["Net debt",f.money(nd)]],
+   "Share price":[["Beta",f.num(px.beta)],["50-day average",f.price(s.avg_50)],["200-day average",f.price(s.avg_200)],["Volatility (5 years)",f.pct(m.volatility)],["Max drawdown (5 years)",f.pct(m.max_drawdown)]]};
+  return `<div class="p s12"><h2>Statistics</h2><div class="kv" style="gap:20px 32px">${Object.entries(G).map(([k,r])=>`<div><b>${k}</b>${r.map(x=>`<div class="row"><span class="mu">${x[0]}</span><b>${x[1]}</b></div>`).join("")}</div>`).join("")}</div></div>`; }
+function tb(c){ const fin=c.financials, ys=Object.keys(fin.revenue);
+  const L=[["Revenue","revenue"],["Operating income","operating_income"],["Net income","net_income"],["Free cash flow","free_cash_flow"],["Cash and investments","cash"],["Total debt","total_debt"],["Shareholders' equity","equity"]];
+  return `<div class="p s12"><h2>Financials by fiscal year</h2><div class="wrap"><table><tr><th></th>${ys.map(y=>`<th>${y}</th>`).join("")}</tr>
+  ${L.map(l=>`<tr><td>${l[0]}</td>${ys.map(y=>`<td>${f.money((fin[l[1]]||{})[y])}</td>`).join("")}</tr>`).join("")}</table></div></div>`; }
+function line(p){ const W=640,H=300,L=8,R=52,T=10,B=24, v=p.map(x=>x[1]), mn=Math.min(...v), mx=Math.max(...v), sp=(mx-mn)||1, col=v[v.length-1]>=v[0]?"#34d399":"#f87171",
+  X=i=>L+(W-L-R)*i/((p.length-1)||1), Y=q=>T+(H-T-B)*(1-(q-mn)/sp), pts=p.map((x,i)=>X(i).toFixed(1)+","+Y(x[1]).toFixed(1)).join(" ");
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="ch" id="svg" role="img" aria-label="Share price chart"><defs><linearGradient id="gr" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".35"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`;
+  for(let i=0;i<=4;i++){ const q=mn+sp*i/4; s+=`<line x1="${L}" x2="${W-R}" y1="${Y(q)}" y2="${Y(q)}" stroke="#1f2b45"/><text x="${W-R+6}" y="${Y(q)+4}" fill="#8b97b3" font-size="11">${q.toFixed(0)}</text>`; }
+  return s+`<polygon points="${L},${H-B} ${pts} ${W-R},${H-B}" fill="url(#gr)"/><polyline fill="none" stroke="${col}" stroke-width="2" points="${pts}"/><line id="cx" y1="${T}" y2="${H-B}" stroke="#8b97b3" stroke-dasharray="3" visibility="hidden"/>
+  <text x="${L}" y="${H-6}" fill="#8b97b3" font-size="11">${p[0][0]}</text><text x="${W-R}" y="${H-6}" text-anchor="end" fill="#8b97b3" font-size="11">${p[p.length-1][0]}</text></svg>`; }
+function ov(c){ const px=c.price, s=c.stats||{}, fin=c.financials, y=Object.keys(fin.revenue).pop();
+  const R=[["Market cap",f.money(px.market_cap)],["Revenue (last fiscal year)",f.money(fin.revenue[y])],["Net income",f.money(fin.net_income[y])],["EPS (trailing)",f.price(s.eps)],
+   ["Shares outstanding",f.money(px.shares_outstanding).replace("$","")],["P/E ratio",f.num(px.pe_ratio)],["Forward P/E",f.num(s.forward_pe)],["Beta",f.num(px.beta)],
+   ["Previous close",f.price(s.prev_close)],["Day's range",s.day_low?f.price(s.day_low)+" - "+f.price(s.day_high):"n/a"],["52-week range",f.price(px.low_52w)+" - "+f.price(px.high_52w)],["Volume",s.volume?(s.volume/1e6).toFixed(1)+"M":"n/a"]];
+  return R.map(x=>`<div class="row"><span class="mu">${x[0]}</span><b>${x[1]}</b></div>`).join(""); }
+function fc(c){ const s=c.stats||{}, p=c.price.last; if(!s.target_mean) return ""; const lo=s.target_low, hi=s.target_high, pos=v=>Math.max(0,Math.min(100,(v-lo)/((hi-lo)||1)*100));
+  return `<div class="p s5"><h2>Analyst forecast</h2><span class="mu">Consensus</span><span class="big">${esc((s.rating||"n/a").replace("_"," "))}</span><p class="mu">${s.analyst_count||"n/a"} analysts</p>
+  <div class="row"><span>Average price target</span><b>${f.price(s.target_mean)} (${f.pct(s.target_mean/p-1)})</b></div><div class="row"><span>Lowest target</span><b>${f.price(lo)}</b></div><div class="row"><span>Highest target</span><b>${f.price(hi)}</b></div>
+  <div style="position:relative;height:10px;margin:18px 0 8px;background:#1f2b45;border-radius:5px"><span style="position:absolute;top:-3px;left:${pos(p)}%;width:3px;height:16px;background:#e6ebf5"></span><span style="position:absolute;top:-3px;left:${pos(s.target_mean)}%;width:3px;height:16px;background:#3b82f6"></span></div>
+  <p class="note">White marks today's price and blue the average target, across the range of analyst targets. Context only, not part of the score.</p></div>`; }
+function pf(c){ const q=c.profile||{}; if(!q.description) return ""; const d=q.description.length>700?q.description.slice(0,700)+"...":q.description;
+  return `<div class="p s7"><h2>About ${esc(c.name)}</h2><p>${esc(d)}</p><div class="row"><span class="mu">Employees</span><b>${q.employees?Number(q.employees).toLocaleString():"n/a"}</b></div><div class="row"><span class="mu">Website</span><b>${esc(q.website||"n/a")}</b></div></div>`; }
+function md(t){ return esc(t).split("\n").map(l=>/^## /.test(l)?`<h2 style="margin-top:14px">${l.slice(3)}</h2>`:/^- /.test(l)?`<div class="row" style="border:0">&bull; ${l.slice(2)}</div>`:l.trim()?`<p>${l}</p>`:"").join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>"); }
+function aiPrompt(c,a){ const sc=Object.fromEntries(Object.entries(a.score.components).map(([k,x])=>[k,x.score]));
+  const dc=a.dcf&&{discount_rate:a.dcf.assumptions.discount_rate.wacc,reverse_dcf:a.dcf.reverse_dcf,scenarios:Object.fromEntries(Object.entries(a.dcf.scenarios).map(([k,x])=>[k,{start_growth:x.starting_fcf_growth,fair_value:x.fair_value_per_share,upside:x.upside}]))};
+  return `You are a careful equity analyst. Write a short report on ${c.name} (${c.ticker}) using ONLY the numbers below. Do not invent facts and do not give personal advice. Use exactly these headings: ## Summary, ## Strengths, ## Weaknesses, ## Risks, ## Scenarios (bear, base, bull). Use short bullet points that start with "- ".\n\n`+JSON.stringify({price:c.price,stats:c.stats,metrics:a.metrics,score:{total:a.score.total,rating:a.score.rating,components:sc},dcf:dc},null,1); }
+async function run(){
+  const t = (new URLSearchParams(location.search).get("t")||"NVDA").toUpperCase();
+  $("#q").value = t;
+  let c, a=null;
+  try { c = await get(`data/companies/${t}.json`); }
+  catch(e){ $("#app").innerHTML = `<div class="p"><h2>No data for ${esc(t)}</h2><p>Could not load ${esc(e.message)}. Run <code>python scripts/fetch_data.py</code> and <code>python scripts/calculate.py</code> for this ticker, and open the page with Live Server.</p></div>`; return; }
+  try { a = await get(`data/analysis/${t}.json`); } catch(e){}
+  const px=c.price, fin=c.financials, years=Object.keys(fin.revenue);
+  const wl = () => { try { return JSON.parse(localStorage.getItem("wl")||"[]"); } catch(e){ return []; } };
+  const starLabel = () => wl().includes(t) ? "In watchlist" : "Add to watchlist";
+  const m = a ? a.metrics : {};
+  const card = (l,v,s) => `<div class="p s3"><span class="mu">${l}</span><span class="big">${v}</span><span class="mu">${s}</span></div>`;
+  const metrics = {revenue:"Revenue", net_income:"Net income", free_cash_flow:"Free cash flow"};
+
+  $("#app").innerHTML = `
+  <div class="p"><div class="top"><div><h1>${esc(c.name)}</h1><span class="mu">${esc(t)} &middot; ${esc(c.sector)} &middot; ${esc(c.industry)} &middot; ${esc(c.country)}</span></div>
+    <div><button id="star">${starLabel()}</button></div></div>
+    <div class="stats"><div><span class="price">${f.price(px.last)}</span> <span id="rc"></span><br><span class="mu">As of ${esc(px.as_of)}. Data may be delayed.</span></div></div></div>
+  <div class="grid">
+    <div class="p s7"><div class="tabs" id="pt"><button data-w="1d">1D</button><button data-w="5d">5D</button><button data-w="1m">1M</button><button data-w="26">6M</button><button data-w="52">1Y</button><button data-w="156">3Y</button><button data-w="999" class="on">5Y</button><span id="hv" class="mu" style="margin-left:auto"></span></div><div id="pc"></div></div>
+    <div class="p s5"><h2>Overview</h2>${ov(c)}</div>
+    ${a ? card("Revenue growth",f.pct(m.revenue_growth),"Fiscal "+a.fiscal_year+" vs prior year")
+      + card("Earnings growth",f.pct(m.earnings_growth),"Net income, year over year")
+      + card("Net margin",f.pct(m.net_margin),"Operating margin "+f.pct(m.operating_margin))
+      + card("Free cash flow",f.money(a.dcf&&a.dcf.base_fcf),"Last twelve months") : ""}
+    <div class="p s7"><h2>Financial performance</h2><div class="tabs" id="mt">${Object.entries(metrics).map(([k,l],i)=>`<button data-k="${k}" class="${i?"":"on"}">${l}</button>`).join("")}</div><div id="chart"></div></div>
+    <div class="p s5"><h2>Overall score</h2>${a?`<div class="score">${donut(a.score.total,RC[a.score.rating]||"#3b82f6")}
+      <div><span class="badge" style="color:${RC[a.score.rating]};border-color:${RC[a.score.rating]}">${esc(a.score.rating)}</span>
+      <p class="note">Model output, not financial advice.</p></div></div>
+      <div style="margin-top:14px">${Object.entries(a.score.components).map(([k,x])=>`<div class="comp"><div><span>${CN[k]} <span class="mu">(weight ${f.pct(x.weight,0)})</span></span><b>${x.score==null?"n/a":x.score.toFixed(1)}</b></div>
+      <div class="bar"><i style="width:${(x.score||0)*10}%;background:${CC[k]}"></i></div></div>`).join("")}</div>
+      ${a.warnings.length?`<p class="note">Data notes: ${a.warnings.map(esc).join("; ")}</p>`:""}`
+      : `<p class="mu">Run <code>python scripts/calculate.py ${esc(t)}</code> to see the score.</p>`}</div>
+    <div class="p s12"><h2>Valuation</h2>${a&&a.dcf?`<div class="tabs" id="st">${Object.keys(a.dcf.scenarios).map(n=>`<button data-n="${n}" class="${n===a.dcf.score_scenario?"on":""}">${n[0].toUpperCase()+n.slice(1)} case</button>`).join("")}</div><div id="val"></div>`
+      : `<p class="mu">No DCF available. It needs positive free cash flow.</p>`}</div>
+    ${fc(c)}${pf(c)}${pg(a)}${st(c,a)}
+    ${tb(c)}
+    <div class="p s12"><h2>How the score is calculated</h2>${a?`<details><summary>Show every metric, weight and range</summary>${methodology(a)}</details>`:`<p class="mu">Available once the analysis file exists.</p>`}</div>
+    <div class="p s12"><h2>AI analyst report</h2>${a?`<p class="note">Written by an AI from the numbers on this page only. <button id="cp">Copy the prompt</button> Paste it into any AI chat, then save the answer as site/data/reports/${esc(t)}.md.</p>`:""}<div id="rep" class="mu">Loading...</div></div>
+  </div>
+  <p class="note">Educational use only. Data comes from Yahoo Finance via yfinance and may be delayed or inaccurate.</p>`;
+
+  const draw = k => { $("#chart").innerHTML = bars(Object.keys(fin[k]), Object.values(fin[k])); };
+  draw("revenue");
+  $("#mt").onclick = e => { const k=e.target.dataset.k; if(!k) return; document.querySelectorAll("#mt button").forEach(b=>b.classList.toggle("on",b===e.target)); draw(k); };
+  $("#star").onclick = () => { let l=wl(); l = l.includes(t) ? l.filter(x=>x!==t) : [...l,t];
+    try { localStorage.setItem("wl", JSON.stringify(l)); } catch(e){} $("#star").textContent = starLabel(); };
+  if(a && a.dcf){
+    $("#val").innerHTML = valuation(a, a.dcf.score_scenario);
+    $("#st").onclick = e => { const n=e.target.dataset.n; if(!n) return; document.querySelectorAll("#st button").forEach(b=>b.classList.toggle("on",b===e.target)); $("#val").innerHTML = valuation(a,n); };
+  }
+  try { const r = await fetch(`data/reports/${t}.md`); if(!r.ok) throw 0; $("#rep").className=""; $("#rep").innerHTML = md(await r.text()); }
+  catch(e){ $("#rep").textContent = `No report yet. Save one as site/data/reports/${t}.md and it will appear here.`; }
+  wirePg(a,px);
+  const dp = w => { const p = isNaN(+w) ? ((c.prices_short||{})[w]||[]) : c.prices_weekly.slice(-w);
+    if(p.length<2){ $("#pc").innerHTML='<p class="mu">No data for this range yet. Re-run python scripts/fetch_data.py.</p>'; $("#rc").textContent=""; return; }
+    $("#pc").innerHTML=line(p); const sv=$("#svg"), ch=p[p.length-1][1]/p[0][1]-1;
+    $("#rc").textContent=(ch>=0?"+":"")+f.pct(ch)+" over this period"; $("#rc").className=ch>=0?"up":"dn";
+    sv.onmousemove=e=>{ const r=sv.getBoundingClientRect(), i=Math.max(0,Math.min(p.length-1,Math.round(((e.clientX-r.left)/r.width*640-8)/580*(p.length-1)))), x=8+580*i/((p.length-1)||1), cx=$("#cx");
+      cx.setAttribute("x1",x); cx.setAttribute("x2",x); cx.setAttribute("visibility","visible"); $("#hv").textContent=p[i][0]+"   "+f.price(p[i][1]); };
+    sv.onmouseleave=()=>{ $("#cx").setAttribute("visibility","hidden"); $("#hv").textContent=""; }; };
+  dp(999);
+  $("#pt").onclick = e => { const w=e.target.dataset.w; if(!w) return; document.querySelectorAll("#pt button").forEach(b=>b.classList.toggle("on",b===e.target)); dp(w); };
+  if($("#cp")) $("#cp").onclick = async () => { try { await navigator.clipboard.writeText(aiPrompt(c,a)); $("#cp").textContent="Copied"; } catch(e){ $("#cp").textContent="Copy failed"; } };
+}
+$("#sf").onsubmit = e => { e.preventDefault(); const v=$("#q").value.trim().toUpperCase(); if(v) location.search = "?t="+encodeURIComponent(v); };
+run();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
     "equity_risk_premium": 0.05,
     "use_adjusted_beta": true,
     "wacc_min": 0.07,
-    "wacc_max": 0.12,
+    "wacc_max": 0.10,
     "terminal_growth": 0.03,
     "forecast_years": 10,
     "scenarios": {
@@ -16,12 +16,26 @@
     },
     "score_scenario": "base"
   },
+  "scenario_rules": {
+    "long_run_growth": 0.04,
+    "pull_toward_long_run": 0.5,
+    "min_start_growth": -0.05,
+    "max_start_growth": 0.30,
+    "bear_multiple": 0.5,
+    "bull_multiple": 1.4,
+    "hold_years": [[0.20, 4], [0.10, 3], [0.05, 2], [-1, 1]],
+    "no_dcf_sectors": ["Financial Services"]
+  },
+  "peg_growth_cap": 0.5,
   "weights": {
     "growth": 0.2,
     "profitability": 0.2,
     "financial_health": 0.2,
     "valuation": 0.2,
     "risk": 0.2
+  },
+  "metric_weights": {
+    "valuation": { "pe_ratio": 0.35, "peg": 0.35, "dcf_upside": 0.30 }
   },
   "ratings": [
     ["Strong Buy", 8.0],
@@ -38,7 +52,8 @@
     "current_ratio": [0.5, 2.5],
     "debt_to_equity": [2.0, 0.0],
     "pe_ratio": [50, 10],
-    "dcf_upside": [-0.3, 0.3],
+    "peg": [2.0, 0.5],
+    "dcf_upside": [-0.5, 0.5],
     "beta": [2.5, 0.6],
     "volatility": [0.80, 0.15],
     "max_drawdown": [0.80, 0.10]
